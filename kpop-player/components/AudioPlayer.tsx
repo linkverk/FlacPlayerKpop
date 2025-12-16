@@ -186,16 +186,22 @@ export default function AudioPlayer({
         {/* Controls */}
         <div className="flex items-center gap-4 mb-3">
           <button
+            type="button"
             onClick={previousTrack}
             className="control-btn p-2 rounded-full glass hover:bg-white/10 transition-colors"
+            title="Previous Track"
+            aria-label="Previous Track"
           >
             <SkipBack className="w-5 h-5 text-white" />
           </button>
 
           <button
+            type="button"
             onClick={togglePlay}
             disabled={!playerState.currentTrack}
             className="control-btn p-4 rounded-full holographic disabled:opacity-50 disabled:cursor-not-allowed"
+            title={playerState.isPlaying ? "Pause" : "Play"}
+            aria-label={playerState.isPlaying ? "Pause" : "Play"}
           >
             {playerState.isPlaying ? (
               <Pause className="w-6 h-6 text-white" fill="white" />
@@ -205,8 +211,11 @@ export default function AudioPlayer({
           </button>
 
           <button
+            type="button"
             onClick={nextTrack}
             className="control-btn p-2 rounded-full glass hover:bg-white/10 transition-colors"
+            title="Next Track"
+            aria-label="Next Track"
           >
             <SkipForward className="w-5 h-5 text-white" />
           </button>
@@ -231,8 +240,11 @@ export default function AudioPlayer({
           {/* Volume Control */}
           <div className="hidden md:flex items-center gap-2">
             <button
+              type="button"
               onClick={toggleMute}
               className="p-2 rounded-full hover:bg-white/10 transition-colors"
+              title={isMuted || playerState.volume === 0 ? "Unmute" : "Mute"}
+              aria-label={isMuted || playerState.volume === 0 ? "Unmute" : "Mute"}
             >
               {isMuted || playerState.volume === 0 ? (
                 <VolumeX className="w-5 h-5 text-white" />
