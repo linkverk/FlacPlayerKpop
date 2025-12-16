@@ -29,13 +29,55 @@ var app = builder.Build();
 app.UseCors("AllowNextJS");
 app.UseRouting();
 
-// Путь к папке с музыкой
-var musicPath = Path.Combine(Directory.GetCurrentDirectory(), "music");
+// ============================================
+// MUSIC DIRECTORY CONFIGURATION
+// ============================================
+// Получаем путь из переменной окружения или используем по умолчанию
+var musicDirEnv = Environment.GetEnvironmentVariable("MUSIC_DIR") ?? "music";
+
+Console.WriteLine($"📝 MUSIC_DIR environment variable: {musicDirEnv}");
+
+// Обработка разных типов путей
+string musicPath;
+
+if (Path.IsPathRooted(musicDirEnv))
+{
+    // Абсолютный путь (Linux: /home/user/Music, Windows: C:/Music)
+    musicPath = musicDirEnv;
+    Console.WriteLine($"✓ Detected absolute path");
+}
+else if (musicDirEnv.StartsWith("~/"))
+{
+    // Домашняя папка (Linux/Mac: ~/Music)
+    var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    musicPath = Path.Combine(home, musicDirEnv.Substring(2));
+    Console.WriteLine($"✓ Detected home directory path: {home}");
+}
+else
+{
+    // Относительный путь (./music, ../Music)
+    musicPath = Path.Combine(Directory.GetCurrentDirectory(), musicDirEnv);
+    Console.WriteLine($"✓ Detected relative path from: {Directory.GetCurrentDirectory()}");
+}
+
+// Нормализация пути
+musicPath = Path.GetFullPath(musicPath);
+
+// Создаем папку если не существует
 if (!Directory.Exists(musicPath))
 {
-    Directory.CreateDirectory(musicPath);
-    Console.WriteLine($"📁 Создана папка для музыки: {musicPath}");
+    try
+    {
+        Directory.CreateDirectory(musicPath);
+        Console.WriteLine($"📁 Created music directory: {musicPath}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Failed to create directory: {ex.Message}");
+    }
 }
+
+Console.WriteLine($"🎵 Using music directory: {musicPath}");
 
 // Функция для извлечения артиста и названия из имени файла
 string ExtractArtistAndTitle(string filenameWithExt)
@@ -104,12 +146,16 @@ List<dynamic> ScanMusicLibrary()
     
     if (!Directory.Exists(musicPath))
     {
+        Console.WriteLine($"⚠️  Music directory not found: {musicPath}");
         return tracks;
     }
     
     // ✨ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: SearchOption.AllDirectories для поиска во всех подпапках
     var flacFiles = Directory.GetFiles(musicPath, "*.flac", SearchOption.AllDirectories);
     var id = 1;
+    
+    Console.WriteLine($"📂 Scanning directory: {musicPath}");
+    Console.WriteLine($"🔍 Found {flacFiles.Length} FLAC files");
     
     foreach (var filepath in flacFiles)
     {
@@ -124,6 +170,8 @@ List<dynamic> ScanMusicLibrary()
         var parts = artistTitle.Split('|');
         var artist = parts[0];
         var title = parts[1];
+        
+        Console.WriteLine($"   ✓ {id}. {artist} - {title}");
         
         tracks.Add(new
         {
@@ -151,9 +199,9 @@ List<dynamic> ScanMusicLibrary()
 app.MapGet("/", () => Results.Ok(new
 {
     message = "K-POP FLAC Music Server (ASP.NET Core)",
-    version = "2.3.0",
+    version = "2.4.0",
     status = "online",
-    features = new[] { "Auto-scan music directory", "Subdirectory support", "No rename required", "Subdirectory streaming" },
+    features = new[] { "Auto-scan music directory", "Subdirectory support", "No rename required", "Subdirectory streaming", "Custom music path" },
     endpoints = new
     {
         musicList = "/api/music",
@@ -182,7 +230,8 @@ app.MapGet("/api/music", () =>
         totalCount = tracks.Count,
         timestamp = DateTime.UtcNow,
         autoScanned = true,
-        subdirectoriesScanned = true
+        subdirectoriesScanned = true,
+        musicDirectory = musicPath
     });
 });
 
@@ -196,6 +245,7 @@ app.MapGet("/api/rescan", () =>
         success = true,
         message = "Музыкальная библиотека пересканирована (включая подпапки)",
         tracksFound = tracks.Count,
+        musicDirectory = musicPath,
         tracks = tracks
     });
 });
@@ -222,7 +272,8 @@ app.MapGet("/api/stream/{**filepath}", async (string filepath, HttpContext conte
                 error = "Файл не найден",
                 message = $"Файл {filenameToSearch} не найден в папке музыки (включая подпапки)",
                 searchedPath = filepath,
-                hint = "Добавьте FLAC файлы в папку music/ или её подпапки"
+                musicDirectory = musicPath,
+                hint = $"Добавьте FLAC файлы в папку {musicPath} или её подпапки"
             }, statusCode: 404);
         }
         
@@ -392,7 +443,8 @@ app.MapGet("/api/stats", () =>
             totalDurationSeconds = totalDuration,
             totalDurationFormatted = TimeSpan.FromSeconds(totalDuration).ToString(@"hh\:mm\:ss"),
             uniqueArtists = artists,
-            averageTrackDuration = tracks.Count > 0 ? totalDuration / tracks.Count : 0
+            averageTrackDuration = tracks.Count > 0 ? totalDuration / tracks.Count : 0,
+            musicDirectory = musicPath
         }
     });
 });
@@ -437,8 +489,10 @@ app.MapGet("/api/health", () => Results.Ok(new
 {
     status = "healthy",
     uptime = DateTime.UtcNow,
-    version = "2.3.0",
-    features = new[] { "auto-scan", "subdirectories", "no-rename", "subdirectory-streaming" }
+    version = "2.4.0",
+    features = new[] { "auto-scan", "subdirectories", "no-rename", "subdirectory-streaming", "custom-music-path" },
+    musicDirectory = musicPath,
+    musicDirectoryExists = Directory.Exists(musicPath)
 }));
 
 // ========================================
@@ -449,7 +503,7 @@ var initialTracks = ScanMusicLibrary();
 
 Console.WriteLine("╔════════════════════════════════════════════════════╗");
 Console.WriteLine("║     🎵 K-POP FLAC Music Server (ASP.NET Core)     ║");
-Console.WriteLine("║    AUTO-SCAN MODE + SUBDIRECTORIES SUPPORT         ║");
+Console.WriteLine("║    AUTO-SCAN MODE + CUSTOM MUSIC PATH              ║");
 Console.WriteLine("╚════════════════════════════════════════════════════╝");
 Console.WriteLine();
 Console.WriteLine($"🌐 Server:          http://localhost:5000");
@@ -469,9 +523,9 @@ Console.WriteLine("   GET  /api/stats              - Статистика биб
 Console.WriteLine("   GET  /api/download/{**path}  - Скачать трек");
 Console.WriteLine("   GET  /api/health             - Health check");
 Console.WriteLine();
-Console.WriteLine("✨ Просто добавьте .flac файлы в папку music/ или её подпапки");
+Console.WriteLine($"✨ Добавьте .flac файлы в: {musicPath}");
 Console.WriteLine("   Формат: 'Artist - Title.flac' или любое имя");
-Console.WriteLine("   Поддержка вложенных папок: music/Artist/Album/Song.flac");
+Console.WriteLine("   Поддержка вложенных папок: Artist/Album/Song.flac");
 Console.WriteLine("🚀 Сервер запущен и готов к работе!");
 Console.WriteLine();
 
@@ -492,7 +546,7 @@ if (initialTracks.Count > 0)
 else
 {
     Console.WriteLine("⚠️  Музыкальные файлы не найдены!");
-    Console.WriteLine("   Добавьте .flac файлы в папку music/ или её подпапки");
+    Console.WriteLine($"   Добавьте .flac файлы в: {musicPath}");
     Console.WriteLine();
 }
 

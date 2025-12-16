@@ -10,11 +10,12 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      # Mount music directory (read-only for security)
-      - ./music:/app/music:ro
+      # Mount music directory from environment variable or default
+      - ${MUSIC_DIR:-./music}:/app/music:ro
     environment:
       - ASPNETCORE_URLS=http://+:5000
       - ASPNETCORE_ENVIRONMENT=Production
+      - MUSIC_DIR=/app/music
     networks:
       - kpop-network
     restart: unless-stopped
