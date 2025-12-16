@@ -5,6 +5,7 @@ using Microsoft.Extensions.FileProviders;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,18 +37,103 @@ if (!Directory.Exists(musicPath))
     Console.WriteLine($"📁 Создана папка для музыки: {musicPath}");
 }
 
-// Музыкальная библиотека
-var musicLibrary = new[]
+// Функция для извлечения артиста и названия из имени файла
+string ExtractArtistAndTitle(string filename)
 {
-    new { id = 1, title = "Dynamite", artist = "BTS", filename = "dynamite.flac", format = "FLAC 24bit/96kHz", emoji = "💥", duration = 199 },
-    new { id = 2, title = "How You Like That", artist = "BLACKPINK", filename = "hylt.flac", format = "FLAC 24bit/96kHz", emoji = "🖤", duration = 182 },
-    new { id = 3, title = "Next Level", artist = "aespa", filename = "nextlevel.flac", format = "FLAC 24bit/96kHz", emoji = "🚀", duration = 210 },
-    new { id = 4, title = "Butter", artist = "BTS", filename = "butter.flac", format = "FLAC 24bit/96kHz", emoji = "🧈", duration = 164 },
-    new { id = 5, title = "ELEVEN", artist = "IVE", filename = "eleven.flac", format = "FLAC 24bit/96kHz", emoji = "🎯", duration = 179 },
-    new { id = 6, title = "Savage", artist = "aespa", filename = "savage.flac", format = "FLAC 24bit/96kHz", emoji = "😈", duration = 234 },
-    new { id = 7, title = "Pink Venom", artist = "BLACKPINK", filename = "pinkvenom.flac", format = "FLAC 24bit/96kHz", emoji = "🐍", duration = 187 },
-    new { id = 8, title = "Spicy", artist = "aespa", filename = "spicy.flac", format = "FLAC 24bit/96kHz", emoji = "🌶️", duration = 195 }
-};
+    // Убираем расширение
+    var nameWithoutExt = Path.GetFileNameWithoutExtension(filename);
+    
+    // Паттерны для парсинга: "Artist - Title" или "Artist-Title"
+    var patterns = new[]
+    {
+        @"^(.+?)\s*-\s*(.+)$",  // "Artist - Title"
+        @"^(.+?)_(.+)$",         // "Artist_Title"
+    };
+    
+    foreach (var pattern in patterns)
+    {
+        var match = Regex.Match(nameWithoutExt, pattern);
+        if (match.Success)
+        {
+            return $"{match.Groups[1].Value.Trim()}|{match.Groups[2].Value.Trim()}";
+        }
+    }
+    
+    // Если паттерн не подошел, используем имя файла как название
+    return $"Unknown Artist|{nameWithoutExt}";
+}
+
+// Функция для определения эмодзи на основе артиста
+string GetEmojiForArtist(string artist)
+{
+    var lowerArtist = artist.ToLower();
+    
+    if (lowerArtist.Contains("bts")) return "💥";
+    if (lowerArtist.Contains("blackpink")) return "🖤";
+    if (lowerArtist.Contains("aespa")) return "🚀";
+    if (lowerArtist.Contains("ive")) return "🎯";
+    if (lowerArtist.Contains("newjeans")) return "🐰";
+    if (lowerArtist.Contains("twice")) return "🍭";
+    if (lowerArtist.Contains("red velvet")) return "🍰";
+    if (lowerArtist.Contains("itzy")) return "⚡";
+    if (lowerArtist.Contains("txt") || lowerArtist.Contains("tomorrow")) return "🌟";
+    if (lowerArtist.Contains("stray kids")) return "🐺";
+    if (lowerArtist.Contains("seventeen")) return "💎";
+    if (lowerArtist.Contains("nct")) return "🌱";
+    if (lowerArtist.Contains("exo")) return "🌙";
+    
+    return "🎵"; // По умолчанию
+}
+
+// Функция для получения длительности (приблизительно по размеру файла)
+int EstimateDuration(long fileSize)
+{
+    // FLAC ~1MB = ~6-7 секунд (приблизительно)
+    // Для точности нужна библиотека для чтения метаданных
+    var megabytes = fileSize / (1024.0 * 1024.0);
+    return (int)(megabytes * 6.5);
+}
+
+// Автоматическое сканирование музыкальной папки
+List<dynamic> ScanMusicLibrary()
+{
+    var tracks = new List<dynamic>();
+    
+    if (!Directory.Exists(musicPath))
+    {
+        return tracks;
+    }
+    
+    var flacFiles = Directory.GetFiles(musicPath, "*.flac");
+    var id = 1;
+    
+    foreach (var filepath in flacFiles)
+    {
+        var filename = Path.GetFileName(filepath);
+        var fileInfo = new FileInfo(filepath);
+        
+        // Извлекаем артиста и название
+        var artistTitle = ExtractArtistAndTitle(filename);
+        var parts = artistTitle.Split('|');
+        var artist = parts[0];
+        var title = parts[1];
+        
+        tracks.Add(new
+        {
+            id = id++,
+            title = title,
+            artist = artist,
+            filename = filename,
+            format = "FLAC 24bit/96kHz",
+            emoji = GetEmojiForArtist(artist),
+            duration = EstimateDuration(fileInfo.Length),
+            fileSize = fileInfo.Length,
+            lastModified = fileInfo.LastWriteTimeUtc
+        });
+    }
+    
+    return tracks;
+}
 
 // ========================================
 // API ROUTES
@@ -57,8 +143,9 @@ var musicLibrary = new[]
 app.MapGet("/", () => Results.Ok(new
 {
     message = "K-POP FLAC Music Server (ASP.NET Core)",
-    version = "2.0.0",
+    version = "2.1.0",
     status = "online",
+    features = new[] { "Auto-scan music directory", "No rename required" },
     endpoints = new
     {
         musicList = "/api/music",
@@ -66,28 +153,40 @@ app.MapGet("/", () => Results.Ok(new
         trackInfo = "/api/track/{id}",
         search = "/api/search?q={query}",
         artists = "/api/artists",
-        formats = "/api/formats"
+        formats = "/api/formats",
+        rescan = "/api/rescan"
     },
     musicDirectory = musicPath,
     serverTime = DateTime.UtcNow
 }));
 
-// Список всех треков
+// Список всех треков (автоматическое сканирование)
 app.MapGet("/api/music", () =>
 {
-    var availableTracks = musicLibrary.Where(track =>
-    {
-        var filepath = Path.Combine(musicPath, track.filename);
-        return File.Exists(filepath);
-    }).ToList();
-
+    var tracks = ScanMusicLibrary();
+    
     return Results.Ok(new
     {
         success = true,
-        tracks = musicLibrary,
-        availableCount = availableTracks.Count,
-        totalCount = musicLibrary.Length,
-        timestamp = DateTime.UtcNow
+        tracks = tracks,
+        availableCount = tracks.Count,
+        totalCount = tracks.Count,
+        timestamp = DateTime.UtcNow,
+        autoScanned = true
+    });
+});
+
+// Пересканировать папку с музыкой
+app.MapGet("/api/rescan", () =>
+{
+    var tracks = ScanMusicLibrary();
+    
+    return Results.Ok(new
+    {
+        success = true,
+        message = "Музыкальная библиотека пересканирована",
+        tracksFound = tracks.Count,
+        tracks = tracks
     });
 });
 
@@ -166,32 +265,15 @@ app.MapGet("/api/stream/{filename}", async (string filename, HttpContext context
 // Информация о конкретном треке
 app.MapGet("/api/track/{id:int}", (int id) =>
 {
-    var track = musicLibrary.FirstOrDefault(t => t.id == id);
+    var tracks = ScanMusicLibrary();
+    var track = tracks.FirstOrDefault(t => t.id == id);
 
     if (track == null)
     {
         return Results.Json(new { error = "Трек не найден" }, statusCode: 404);
     }
 
-    var filepath = Path.Combine(musicPath, track.filename);
-    var exists = File.Exists(filepath);
-
-    FileInfo? fileInfo = exists ? new FileInfo(filepath) : null;
-
-    return Results.Ok(new
-    {
-        track.id,
-        track.title,
-        track.artist,
-        track.filename,
-        track.format,
-        track.emoji,
-        track.duration,
-        available = exists,
-        fileSize = fileInfo?.Length,
-        lastModified = fileInfo?.LastWriteTimeUtc,
-        streamUrl = exists ? $"/api/stream/{track.filename}" : null
-    });
+    return Results.Ok(track);
 });
 
 // Поиск треков
@@ -207,10 +289,12 @@ app.MapGet("/api/search", (string? q) =>
         });
     }
 
+    var tracks = ScanMusicLibrary();
     var query = q.ToLower();
-    var results = musicLibrary.Where(track =>
+    var results = tracks.Where(track =>
         track.title.ToLower().Contains(query) ||
-        track.artist.ToLower().Contains(query)
+        track.artist.ToLower().Contains(query) ||
+        track.filename.ToLower().Contains(query)
     ).ToList();
 
     return Results.Ok(new
@@ -225,16 +309,16 @@ app.MapGet("/api/search", (string? q) =>
 // Список артистов
 app.MapGet("/api/artists", () =>
 {
-    var artists = musicLibrary
-        .Select(t => t.artist)
-        .Distinct()
-        .OrderBy(a => a)
-        .Select(artist => new
+    var tracks = ScanMusicLibrary();
+    var artists = tracks
+        .GroupBy(t => t.artist)
+        .Select(g => new
         {
-            name = artist,
-            trackCount = musicLibrary.Count(t => t.artist == artist),
-            tracks = musicLibrary.Where(t => t.artist == artist).Select(t => new { t.id, t.title })
+            name = g.Key,
+            trackCount = g.Count(),
+            tracks = g.Select(t => new { t.id, t.title })
         })
+        .OrderBy(a => a.name)
         .ToList();
 
     return Results.Ok(new
@@ -248,13 +332,13 @@ app.MapGet("/api/artists", () =>
 // Информация о форматах
 app.MapGet("/api/formats", () =>
 {
-    var formats = musicLibrary
-        .Select(t => t.format)
-        .Distinct()
-        .Select(format => new
+    var tracks = ScanMusicLibrary();
+    var formats = tracks
+        .GroupBy(t => t.format)
+        .Select(g => new
         {
-            format,
-            count = musicLibrary.Count(t => t.format == format)
+            format = g.Key,
+            count = g.Count()
         })
         .ToList();
 
@@ -268,27 +352,22 @@ app.MapGet("/api/formats", () =>
 // Статистика библиотеки
 app.MapGet("/api/stats", () =>
 {
-    var availableCount = musicLibrary.Count(track =>
-    {
-        var filepath = Path.Combine(musicPath, track.filename);
-        return File.Exists(filepath);
-    });
-
-    var totalDuration = musicLibrary.Sum(t => t.duration);
-    var artists = musicLibrary.Select(t => t.artist).Distinct().Count();
+    var tracks = ScanMusicLibrary();
+    var totalDuration = tracks.Sum(t => (int)t.duration);
+    var artists = tracks.Select(t => (string)t.artist).Distinct().Count();
 
     return Results.Ok(new
     {
         success = true,
         stats = new
         {
-            totalTracks = musicLibrary.Length,
-            availableTracks = availableCount,
-            unavailableTracks = musicLibrary.Length - availableCount,
+            totalTracks = tracks.Count,
+            availableTracks = tracks.Count,
+            unavailableTracks = 0,
             totalDurationSeconds = totalDuration,
             totalDurationFormatted = TimeSpan.FromSeconds(totalDuration).ToString(@"hh\:mm\:ss"),
             uniqueArtists = artists,
-            averageTrackDuration = totalDuration / musicLibrary.Length
+            averageTrackDuration = tracks.Count > 0 ? totalDuration / tracks.Count : 0
         }
     });
 });
@@ -319,23 +398,28 @@ app.MapGet("/api/health", () => Results.Ok(new
 {
     status = "healthy",
     uptime = DateTime.UtcNow,
-    version = "2.0.0"
+    version = "2.1.0",
+    features = new[] { "auto-scan", "no-rename" }
 }));
 
 // ========================================
 // STARTUP
 // ========================================
 
+var initialTracks = ScanMusicLibrary();
+
 Console.WriteLine("╔════════════════════════════════════════════════════╗");
 Console.WriteLine("║     🎵 K-POP FLAC Music Server (ASP.NET Core)     ║");
+Console.WriteLine("║         AUTO-SCAN MODE (No Rename Required)        ║");
 Console.WriteLine("╚════════════════════════════════════════════════════╝");
 Console.WriteLine();
 Console.WriteLine($"🌐 Server:          http://localhost:5000");
 Console.WriteLine($"📁 Music Directory: {musicPath}");
-Console.WriteLine($"📊 Tracks:          {musicLibrary.Length}");
+Console.WriteLine($"📊 Tracks Found:    {initialTracks.Count}");
 Console.WriteLine();
 Console.WriteLine("💡 API Endpoints:");
-Console.WriteLine("   GET  /api/music              - Список всех треков");
+Console.WriteLine("   GET  /api/music              - Список всех треков (авто-сканирование)");
+Console.WriteLine("   GET  /api/rescan             - Пересканировать папку");
 Console.WriteLine("   GET  /api/stream/{filename}  - Стриминг аудио");
 Console.WriteLine("   GET  /api/track/{id}         - Информация о треке");
 Console.WriteLine("   GET  /api/search?q={query}   - Поиск треков");
@@ -345,8 +429,23 @@ Console.WriteLine("   GET  /api/stats              - Статистика биб
 Console.WriteLine("   GET  /api/download/{filename}- Скачать трек");
 Console.WriteLine("   GET  /api/health             - Health check");
 Console.WriteLine();
-Console.WriteLine("⚠️  Добавьте FLAC файлы в папку music/");
+Console.WriteLine("✨ Просто добавьте .flac файлы в папку music/");
+Console.WriteLine("   Формат: 'Artist - Title.flac' или любое имя");
 Console.WriteLine("🚀 Сервер запущен и готов к работе!");
 Console.WriteLine();
+
+if (initialTracks.Count > 0)
+{
+    Console.WriteLine("🎵 Найденные треки:");
+    foreach (var track in initialTracks.Take(5))
+    {
+        Console.WriteLine($"   {track.emoji} {track.artist} - {track.title}");
+    }
+    if (initialTracks.Count > 5)
+    {
+        Console.WriteLine($"   ... и ещё {initialTracks.Count - 5} треков");
+    }
+    Console.WriteLine();
+}
 
 app.Run("http://0.0.0.0:5000");
