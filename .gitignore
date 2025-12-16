@@ -5,17 +5,20 @@
 # ========================================
 # Music Files (IMPORTANT!)
 # ========================================
-# Uncomment if you DON'T want to commit music files
 music/*.flac
 music/*.mp3
 music/*.wav
 music/*.ogg
 music/*.m4a
 music/*.aac
+music/*.alac
+music/*.wma
+music/*.ape
 
-# Or keep music directory but ignore all audio
-# music/*
-# !music/.gitkeep
+# Игнорировать всё в music/
+music/*
+!music/.gitignore
+!music/.gitkeep
 
 # ========================================
 # OS Generated Files
