@@ -3,6 +3,7 @@ export interface Track {
   title: string;
   artist: string;
   filename: string;
+  relativePath?: string; // Добавлено для поддержки подпапок
   format: string;
   emoji: string;
   duration?: number;

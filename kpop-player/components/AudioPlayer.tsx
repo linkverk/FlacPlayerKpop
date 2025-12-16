@@ -37,7 +37,9 @@ export default function AudioPlayer({
       setPlayerState(prev => ({ ...prev, currentTrack: track, currentTrackIndex }));
       
       if (audioRef.current) {
-        audioRef.current.src = `/api/stream/${track.filename}`;
+        // Используем relativePath если доступен, иначе filename
+        const streamPath = track.relativePath || track.filename;
+        audioRef.current.src = `/api/stream/${streamPath}`;
         audioRef.current.load();
       }
     }
@@ -173,6 +175,11 @@ export default function AudioPlayer({
                 <p className="text-gray-400 text-sm truncate">
                   {playerState.currentTrack.artist}
                 </p>
+                {playerState.currentTrack.relativePath && (
+                  <p className="text-gray-500 text-xs truncate">
+                    📂 {playerState.currentTrack.relativePath}
+                  </p>
+                )}
               </div>
               <div className="hidden sm:block px-3 py-1 rounded-lg bg-gradient-to-r from-neon-pink/20 to-neon-cyan/20 border border-neon-cyan/30">
                 <span className="text-xs text-neon-cyan font-semibold">

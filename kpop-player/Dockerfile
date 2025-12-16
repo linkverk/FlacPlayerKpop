@@ -1,38 +1,30 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
-
-# Install dependencies
 COPY package.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 FROM node:20-alpine AS builder
 WORKDIR /app
-
-# Copy dependencies
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Build application
 RUN npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
-
 ENV NODE_ENV production
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
 
-# Copy built application
-COPY --from=builder /app/public ./public
+# Копируем только то, что точно существует
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Создаём пустую папку public (не копируем)
+RUN mkdir -p ./public && chown -R nextjs:nodejs ./public
+
 USER nextjs
-
 EXPOSE 3000
-
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 

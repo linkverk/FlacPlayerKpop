@@ -1,66 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { filename: string } }
 ) {
   const filename = params.filename;
-  const musicPath = path.join(process.cwd(), 'public', 'music');
-  const filepath = path.join(musicPath, filename);
-
-  // Проверка безопасности
-  const resolvedPath = path.resolve(filepath);
-  if (!resolvedPath.startsWith(musicPath)) {
-    return NextResponse.json(
-      { error: 'Доступ запрещен' },
-      { status: 403 }
+  const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+  
+  try {
+    // Проксируем запрос к backend
+    const range = request.headers.get('range');
+    const headers: HeadersInit = {};
+    
+    if (range) {
+      headers['Range'] = range;
+    }
+    
+    const response = await fetch(
+      `${backendUrl}/api/stream/${encodeURIComponent(filename)}`,
+      { headers }
     );
-  }
-
-  // Проверка существования файла
-  if (!fs.existsSync(filepath)) {
+    
+    if (!response.ok) {
+      return NextResponse.json(
+        { 
+          error: 'Файл не найден',
+          message: `Не удалось получить файл ${filename} с backend`
+        },
+        { status: response.status }
+      );
+    }
+    
+    // Копируем все заголовки от backend
+    const responseHeaders = new Headers();
+    response.headers.forEach((value, key) => {
+      responseHeaders.set(key, value);
+    });
+    
+    return new NextResponse(response.body, {
+      status: response.status,
+      headers: responseHeaders,
+    });
+  } catch (error) {
+    console.error('Stream proxy error:', error);
     return NextResponse.json(
       { 
-        error: 'Файл не найден',
-        message: `Файл ${filename} не найден в папке музыки`
+        error: 'Backend недоступен',
+        message: 'Не удалось подключиться к серверу музыки'
       },
-      { status: 404 }
+      { status: 503 }
     );
-  }
-
-  const stat = fs.statSync(filepath);
-  const fileSize = stat.size;
-  const range = request.headers.get('range');
-
-  // Поддержка Range requests для стриминга
-  if (range) {
-    const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-    const chunksize = (end - start) + 1;
-
-    const stream = fs.createReadStream(filepath, { start, end });
-    
-    return new NextResponse(stream as any, {
-      status: 206,
-      headers: {
-        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': chunksize.toString(),
-        'Content-Type': 'audio/flac',
-      },
-    });
-  } else {
-    const stream = fs.createReadStream(filepath);
-    
-    return new NextResponse(stream as any, {
-      status: 200,
-      headers: {
-        'Content-Length': fileSize.toString(),
-        'Content-Type': 'audio/flac',
-      },
-    });
   }
 }

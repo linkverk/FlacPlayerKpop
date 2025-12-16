@@ -38,10 +38,10 @@ if (!Directory.Exists(musicPath))
 }
 
 // Функция для извлечения артиста и названия из имени файла
-string ExtractArtistAndTitle(string filename)
+string ExtractArtistAndTitle(string filenameWithExt)
 {
     // Убираем расширение
-    var nameWithoutExt = Path.GetFileNameWithoutExtension(filename);
+    var nameWithoutExt = Path.GetFileNameWithoutExtension(filenameWithExt);
     
     // Паттерны для парсинга: "Artist - Title" или "Artist_Title"
     var patterns = new[]
@@ -113,14 +113,14 @@ List<dynamic> ScanMusicLibrary()
     
     foreach (var filepath in flacFiles)
     {
-        var filename = Path.GetFileName(filepath);
+        var fileBasename = Path.GetFileName(filepath);
         var fileInfo = new FileInfo(filepath);
         
         // Получаем относительный путь от папки music
         var relativePath = Path.GetRelativePath(musicPath, filepath);
         
         // Извлекаем артиста и название
-        var artistTitle = ExtractArtistAndTitle(filename);
+        var artistTitle = ExtractArtistAndTitle(fileBasename);
         var parts = artistTitle.Split('|');
         var artist = parts[0];
         var title = parts[1];
@@ -130,8 +130,8 @@ List<dynamic> ScanMusicLibrary()
             id = id++,
             title = title,
             artist = artist,
-            filename = filename,  // Только имя файла для стриминга
-            relativePath = relativePath.Replace("\\", "/"),  // Полный путь для отладки
+            filename = fileBasename,  // Только имя файла для обратной совместимости
+            relativePath = relativePath.Replace("\\", "/"),  // Полный относительный путь для стриминга
             format = "FLAC 24bit/96kHz",
             emoji = GetEmojiForArtist(artist),
             duration = EstimateDuration(fileInfo.Length),
@@ -151,13 +151,14 @@ List<dynamic> ScanMusicLibrary()
 app.MapGet("/", () => Results.Ok(new
 {
     message = "K-POP FLAC Music Server (ASP.NET Core)",
-    version = "2.2.0",
+    version = "2.3.0",
     status = "online",
-    features = new[] { "Auto-scan music directory", "Subdirectory support", "No rename required" },
+    features = new[] { "Auto-scan music directory", "Subdirectory support", "No rename required", "Subdirectory streaming" },
     endpoints = new
     {
         musicList = "/api/music",
         stream = "/api/stream/{filename}",
+        streamSubdir = "/api/stream/{**filepath}",
         trackInfo = "/api/track/{id}",
         search = "/api/search?q={query}",
         artists = "/api/artists",
@@ -199,24 +200,36 @@ app.MapGet("/api/rescan", () =>
     });
 });
 
-// Стриминг аудио с поддержкой Range requests
-app.MapGet("/api/stream/{filename}", async (string filename, HttpContext context) =>
+// Стриминг аудио с поддержкой Range requests и подпапок
+app.MapGet("/api/stream/{**filepath}", async (string filepath, HttpContext context) =>
 {
-    // ✨ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Ищем файл рекурсивно во всех подпапках
-    var allFiles = Directory.GetFiles(musicPath, filename, SearchOption.AllDirectories);
+    // Декодируем путь (на случай если есть URL-кодирование)
+    filepath = Uri.UnescapeDataString(filepath);
     
-    if (allFiles.Length == 0)
+    // Ищем файл - сначала по относительному пути, потом по имени
+    var fullFilePath = Path.Combine(musicPath, filepath);
+    
+    // Если файл не найден по пути, ищем по имени рекурсивно
+    if (!File.Exists(fullFilePath))
     {
-        return Results.Json(new
+        var filenameToSearch = Path.GetFileName(filepath);
+        var allFiles = Directory.GetFiles(musicPath, filenameToSearch, SearchOption.AllDirectories);
+        
+        if (allFiles.Length == 0)
         {
-            error = "Файл не найден",
-            message = $"Файл {filename} не найден в папке музыки (включая подпапки)",
-            hint = "Добавьте FLAC файлы в папку music/ или её подпапки"
-        }, statusCode: 404);
+            return Results.Json(new
+            {
+                error = "Файл не найден",
+                message = $"Файл {filenameToSearch} не найден в папке музыки (включая подпапки)",
+                searchedPath = filepath,
+                hint = "Добавьте FLAC файлы в папку music/ или её подпапки"
+            }, statusCode: 404);
+        }
+        
+        fullFilePath = allFiles[0]; // Берём первое совпадение
     }
     
-    var filepath = allFiles[0]; // Берём первое совпадение
-    var fullPath = Path.GetFullPath(filepath);
+    var fullPath = Path.GetFullPath(fullFilePath);
     
     // Проверка безопасности - файл должен быть в папке музыки
     if (!fullPath.StartsWith(Path.GetFullPath(musicPath)))
@@ -224,7 +237,7 @@ app.MapGet("/api/stream/{filename}", async (string filename, HttpContext context
         return Results.Json(new { error = "Доступ запрещен" }, statusCode: 403);
     }
 
-    var fileInfo = new FileInfo(filepath);
+    var fileInfo = new FileInfo(fullFilePath);
     var rangeHeader = context.Request.Headers["Range"].ToString();
 
     // Если есть Range header - отправляем частичный контент
@@ -244,7 +257,7 @@ app.MapGet("/api/stream/{filename}", async (string filename, HttpContext context
         context.Response.Headers["Content-Length"] = length.ToString();
         context.Response.ContentType = "audio/flac";
 
-        using var stream = new FileStream(filepath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var stream = new FileStream(fullFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         stream.Seek(start, SeekOrigin.Begin);
 
         var buffer = new byte[81920]; // 80KB buffer для плавного стриминга
@@ -268,7 +281,7 @@ app.MapGet("/api/stream/{filename}", async (string filename, HttpContext context
         context.Response.Headers["Accept-Ranges"] = "bytes";
         context.Response.ContentType = "audio/flac";
 
-        await context.Response.SendFileAsync(filepath);
+        await context.Response.SendFileAsync(fullFilePath);
         return Results.Empty;
     }
 });
@@ -305,7 +318,8 @@ app.MapGet("/api/search", (string? q) =>
     var results = tracks.Where(track =>
         track.title.ToLower().Contains(query) ||
         track.artist.ToLower().Contains(query) ||
-        track.filename.ToLower().Contains(query)
+        track.filename.ToLower().Contains(query) ||
+        track.relativePath.ToLower().Contains(query)
     ).ToList();
 
     return Results.Ok(new
@@ -384,26 +398,37 @@ app.MapGet("/api/stats", () =>
 });
 
 // Скачивание трека (не стриминг, а полная загрузка)
-app.MapGet("/api/download/{filename}", async (string filename, HttpContext context) =>
+app.MapGet("/api/download/{**filepath}", async (string filepath, HttpContext context) =>
 {
-    // Ищем файл рекурсивно
-    var allFiles = Directory.GetFiles(musicPath, filename, SearchOption.AllDirectories);
+    // Декодируем путь
+    filepath = Uri.UnescapeDataString(filepath);
     
-    if (allFiles.Length == 0)
+    // Ищем файл
+    var fullFilePath = Path.Combine(musicPath, filepath);
+    
+    if (!File.Exists(fullFilePath))
     {
-        return Results.Json(new { error = "Файл не найден" }, statusCode: 404);
+        var filenameToSearch = Path.GetFileName(filepath);
+        var allFiles = Directory.GetFiles(musicPath, filenameToSearch, SearchOption.AllDirectories);
+        
+        if (allFiles.Length == 0)
+        {
+            return Results.Json(new { error = "Файл не найден" }, statusCode: 404);
+        }
+        
+        fullFilePath = allFiles[0];
     }
     
-    var filepath = allFiles[0];
-    var fullPath = Path.GetFullPath(filepath);
+    var fullPath = Path.GetFullPath(fullFilePath);
 
     if (!fullPath.StartsWith(Path.GetFullPath(musicPath)))
     {
         return Results.Json(new { error = "Доступ запрещен" }, statusCode: 403);
     }
 
-    context.Response.Headers["Content-Disposition"] = $"attachment; filename=\"{filename}\"";
-    await context.Response.SendFileAsync(filepath);
+    var downloadFilename = Path.GetFileName(fullFilePath);
+    context.Response.Headers["Content-Disposition"] = $"attachment; filename=\"{downloadFilename}\"";
+    await context.Response.SendFileAsync(fullFilePath);
     return Results.Empty;
 });
 
@@ -412,8 +437,8 @@ app.MapGet("/api/health", () => Results.Ok(new
 {
     status = "healthy",
     uptime = DateTime.UtcNow,
-    version = "2.2.0",
-    features = new[] { "auto-scan", "subdirectories", "no-rename" }
+    version = "2.3.0",
+    features = new[] { "auto-scan", "subdirectories", "no-rename", "subdirectory-streaming" }
 }));
 
 // ========================================
@@ -435,13 +460,13 @@ Console.WriteLine();
 Console.WriteLine("💡 API Endpoints:");
 Console.WriteLine("   GET  /api/music              - Список всех треков (авто-сканирование)");
 Console.WriteLine("   GET  /api/rescan             - Пересканировать папку");
-Console.WriteLine("   GET  /api/stream/{filename}  - Стриминг аудио");
+Console.WriteLine("   GET  /api/stream/{**path}    - Стриминг аудио (с поддержкой подпапок)");
 Console.WriteLine("   GET  /api/track/{id}         - Информация о треке");
 Console.WriteLine("   GET  /api/search?q={query}   - Поиск треков");
 Console.WriteLine("   GET  /api/artists            - Список артистов");
 Console.WriteLine("   GET  /api/formats            - Форматы аудио");
 Console.WriteLine("   GET  /api/stats              - Статистика библиотеки");
-Console.WriteLine("   GET  /api/download/{filename}- Скачать трек");
+Console.WriteLine("   GET  /api/download/{**path}  - Скачать трек");
 Console.WriteLine("   GET  /api/health             - Health check");
 Console.WriteLine();
 Console.WriteLine("✨ Просто добавьте .flac файлы в папку music/ или её подпапки");
