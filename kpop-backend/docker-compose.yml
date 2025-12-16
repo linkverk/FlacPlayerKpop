@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  kpop-backend:
+    build: .
+    container_name: kpop-flac-server
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount your music directory
+      - ./music:/app/music:ro
+    environment:
+      - ASPNETCORE_URLS=http://+:5000
+      - ASPNETCORE_ENVIRONMENT=Production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
