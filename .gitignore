@@ -1,0 +1,166 @@
+# ========================================
+# K-POP FLAC Player - Root .gitignore
+# ========================================
+
+# ========================================
+# Music Files (IMPORTANT!)
+# ========================================
+# Uncomment if you DON'T want to commit music files
+music/*.flac
+music/*.mp3
+music/*.wav
+music/*.ogg
+music/*.m4a
+music/*.aac
+
+# Or keep music directory but ignore all audio
+# music/*
+# !music/.gitkeep
+
+# ========================================
+# OS Generated Files
+# ========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ========================================
+# IDE / Editors
+# ========================================
+# VS Code
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+.vscode/*.code-workspace
+.vscode/extensions.json
+
+# Keep workspace file
+!kpop-flac-player.code-workspace
+
+# JetBrains (WebStorm, Rider, etc)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+.vim/
+
+# ========================================
+# Environment Variables
+# ========================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Keep example file
+!.env.example
+
+# ========================================
+# Docker
+# ========================================
+# Docker volumes (optional)
+# docker-volumes/
+
+# ========================================
+# Logs
+# ========================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ========================================
+# Build Artifacts
+# ========================================
+dist/
+build/
+out/
+publish/
+
+# ========================================
+# Temporary Files
+# ========================================
+tmp/
+temp/
+*.tmp
+*.temp
+
+# ========================================
+# Backup Files
+# ========================================
+*.bak
+*.backup
+*~
+
+# ========================================
+# Archive Files (optional)
+# ========================================
+# Uncomment if you don't want to commit archives
+# *.zip
+# *.tar.gz
+# *.tar
+
+# ========================================
+# SSL/Certificates (IMPORTANT!)
+# ========================================
+*.pem
+*.key
+*.crt
+*.cert
+ssl/
+
+# ========================================
+# Database Files
+# ========================================
+*.sqlite
+*.sqlite3
+*.db
+
+# ========================================
+# Frontend Specific (Next.js)
+# ========================================
+# See kpop-player/.gitignore for detailed frontend ignores
+
+# ========================================
+# Backend Specific (ASP.NET)
+# ========================================
+# See kpop-backend/.gitignore for detailed backend ignores
+
+# ========================================
+# Testing
+# ========================================
+coverage/
+.nyc_output/
+test-results/
+
+# ========================================
+# Documentation (optional)
+# ========================================
+# Uncomment if you don't want to commit generated docs
+# docs/_build/
+# docs/site/
+
+# ========================================
+# Personal Notes
+# ========================================
+TODO.md
+NOTES.md
+.notes/
