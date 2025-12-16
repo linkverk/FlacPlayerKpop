@@ -101,8 +101,8 @@ desktop.ini
 /public/music/*.m4a
 
 # Or ignore entire music directory except .gitkeep
-# /public/music/*
-# !/public/music/.gitkeep
+/public/music/*
+!/public/music/.gitkeep
 
 # ========================================
 # Temporary Files
