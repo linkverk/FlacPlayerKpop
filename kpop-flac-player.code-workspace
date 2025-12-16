@@ -1,0 +1,228 @@
+{
+  "folders": [
+    {
+      "name": "🎵 K-POP FLAC Player",
+      "path": "."
+    },
+    {
+      "name": "🎨 Frontend (Next.js)",
+      "path": "./kpop-player"
+    },
+    {
+      "name": "⚙️ Backend (ASP.NET)",
+      "path": "./kpop-backend"
+    }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": true
+    },
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "typescript.tsdk": "kpop-player/node_modules/typescript/lib",
+    
+    // Python/Docker
+    "files.associations": {
+      "docker-compose.yml": "yaml",
+      "Dockerfile": "dockerfile"
+    },
+    
+    // Exclude folders
+    "files.exclude": {
+      "**/.git": true,
+      "**/.DS_Store": true,
+      "**/node_modules": true,
+      "**/.next": true,
+      "**/bin": true,
+      "**/obj": true
+    },
+    
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/.next": true,
+      "**/bin": true,
+      "**/obj": true
+    },
+    
+    // Terminal
+    "terminal.integrated.defaultProfile.linux": "bash",
+    "terminal.integrated.defaultProfile.osx": "bash",
+    
+    // File nesting
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.patterns": {
+      "*.ts": "${capture}.js",
+      "*.tsx": "${capture}.js",
+      "package.json": "package-lock.json, yarn.lock, pnpm-lock.yaml",
+      "docker-compose.yml": "docker-compose.*.yml, Dockerfile*",
+      "tsconfig.json": "tsconfig.*.json",
+      ".env": ".env.*"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      // Frontend
+      "dbaeumer.vscode-eslint",
+      "esbenp.prettier-vscode",
+      "bradlc.vscode-tailwindcss",
+      
+      // Backend
+      "ms-dotnettools.csharp",
+      "ms-dotnettools.csdevkit",
+      
+      // Docker
+      "ms-azuretools.vscode-docker",
+      
+      // Utils
+      "streetsidesoftware.code-spell-checker",
+      "eamodio.gitlens",
+      "christian-kohler.path-intellisense",
+      "wix.vscode-import-cost"
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "🚀 Start All (Docker)",
+        "type": "shell",
+        "command": "docker-compose up -d",
+        "problemMatcher": [],
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        }
+      },
+      {
+        "label": "🛑 Stop All (Docker)",
+        "type": "shell",
+        "command": "docker-compose down",
+        "problemMatcher": []
+      },
+      {
+        "label": "🔄 Restart All (Docker)",
+        "type": "shell",
+        "command": "docker-compose restart",
+        "problemMatcher": []
+      },
+      {
+        "label": "📋 View Logs (Docker)",
+        "type": "shell",
+        "command": "docker-compose logs -f",
+        "problemMatcher": []
+      },
+      {
+        "label": "▶️ Frontend Dev",
+        "type": "shell",
+        "command": "npm run dev",
+        "options": {
+          "cwd": "${workspaceFolder}/kpop-player"
+        },
+        "problemMatcher": [],
+        "group": "build"
+      },
+      {
+        "label": "⚙️ Backend Dev",
+        "type": "shell",
+        "command": "dotnet run",
+        "options": {
+          "cwd": "${workspaceFolder}/kpop-backend"
+        },
+        "problemMatcher": "$msCompile",
+        "group": "build"
+      },
+      {
+        "label": "🔨 Build Frontend",
+        "type": "shell",
+        "command": "npm run build",
+        "options": {
+          "cwd": "${workspaceFolder}/kpop-player"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "🔨 Build Backend",
+        "type": "shell",
+        "command": "dotnet build",
+        "options": {
+          "cwd": "${workspaceFolder}/kpop-backend"
+        },
+        "problemMatcher": "$msCompile"
+      },
+      {
+        "label": "🧪 Install Frontend",
+        "type": "shell",
+        "command": "npm install",
+        "options": {
+          "cwd": "${workspaceFolder}/kpop-player"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "🧪 Restore Backend",
+        "type": "shell",
+        "command": "dotnet restore",
+        "options": {
+          "cwd": "${workspaceFolder}/kpop-backend"
+        },
+        "problemMatcher": []
+      }
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "🎨 Frontend (Next.js)",
+        "type": "node",
+        "request": "launch",
+        "runtimeExecutable": "npm",
+        "runtimeArgs": ["run", "dev"],
+        "cwd": "${workspaceFolder}/kpop-player",
+        "console": "integratedTerminal",
+        "internalConsoleOptions": "neverOpen",
+        "serverReadyAction": {
+          "pattern": "started server on .+, url: (https?://.+)",
+          "uriFormat": "%s",
+          "action": "openExternally"
+        }
+      },
+      {
+        "name": "⚙️ Backend (ASP.NET)",
+        "type": "coreclr",
+        "request": "launch",
+        "preLaunchTask": "build",
+        "program": "${workspaceFolder}/kpop-backend/bin/Debug/net8.0/KPopFlacMusicServer.dll",
+        "args": [],
+        "cwd": "${workspaceFolder}/kpop-backend",
+        "stopAtEntry": false,
+        "serverReadyAction": {
+          "action": "openExternally",
+          "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+        },
+        "env": {
+          "ASPNETCORE_ENVIRONMENT": "Development"
+        },
+        "sourceFileMap": {
+          "/Views": "${workspaceFolder}/Views"
+        }
+      },
+      {
+        "name": "🚀 Full Stack (Both)",
+        "type": "node",
+        "request": "launch",
+        "runtimeExecutable": "docker-compose",
+        "runtimeArgs": ["up"],
+        "console": "integratedTerminal"
+      }
+    ],
+    "compounds": [
+      {
+        "name": "🎵 Start Frontend + Backend",
+        "configurations": ["🎨 Frontend (Next.js)", "⚙️ Backend (ASP.NET)"],
+        "stopAll": true
+      }
+    ]
+  }
+}
