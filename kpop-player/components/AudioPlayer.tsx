@@ -39,8 +39,18 @@ export default function AudioPlayer({
       if (audioRef.current) {
         // Используем relativePath если доступен, иначе filename
         const streamPath = track.relativePath || track.filename;
-        audioRef.current.src = `/api/stream/${streamPath}`;
+        // ИСПРАВЛЕНО: Кодируем весь путь для корректной работы с подпапками и спецсимволами
+        const encodedPath = streamPath.split('/').map(encodeURIComponent).join('/');
+        audioRef.current.src = `/api/stream/${encodedPath}`;
         audioRef.current.load();
+        
+        console.log('Loading track:', {
+          title: track.title,
+          artist: track.artist,
+          path: streamPath,
+          encodedPath: encodedPath,
+          fullUrl: `/api/stream/${encodedPath}`
+        });
       }
     }
   }, [currentTrackIndex, playlist]);
@@ -67,6 +77,7 @@ export default function AudioPlayer({
       setPlayerState(prev => ({ ...prev, isPlaying: !prev.isPlaying }));
     } catch (error) {
       console.error('Playback error:', error);
+      alert('Ошибка воспроизведения. Проверьте консоль для деталей.');
     }
   };
 
@@ -120,6 +131,18 @@ export default function AudioPlayer({
 
   const handleEnded = () => {
     nextTrack();
+  };
+  
+  const handleError = (e: React.SyntheticEvent<HTMLAudioElement, Event>) => {
+    console.error('Audio error:', e);
+    const audio = e.currentTarget;
+    console.error('Audio error details:', {
+      error: audio.error,
+      code: audio.error?.code,
+      message: audio.error?.message,
+      src: audio.src,
+      currentTrack: playerState.currentTrack
+    });
   };
 
   const formatTime = (seconds: number): string => {
@@ -278,6 +301,10 @@ export default function AudioPlayer({
         onEnded={handleEnded}
         onPlay={() => setPlayerState(prev => ({ ...prev, isPlaying: true }))}
         onPause={() => setPlayerState(prev => ({ ...prev, isPlaying: false }))}
+        onError={handleError}
+        onLoadStart={() => console.log('Loading audio...')}
+        onLoadedData={() => console.log('Audio loaded successfully')}
+        onCanPlay={() => console.log('Audio can play')}
       />
     </motion.div>
   );
