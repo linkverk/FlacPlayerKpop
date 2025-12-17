@@ -32,8 +32,16 @@ app.UseRouting();
 // ============================================
 // MUSIC DIRECTORY CONFIGURATION
 // ============================================
-// Получаем путь из переменной окружения или используем по умолчанию
-var musicDirEnv = Environment.GetEnvironmentVariable("MUSIC_DIR") ?? "music";
+// Получаем путь из переменной окружения
+var musicDirEnv = Environment.GetEnvironmentVariable("MUSIC_DIR");
+
+if (string.IsNullOrEmpty(musicDirEnv))
+{
+    Console.WriteLine("⚠️  MUSIC_DIR не установлен!");
+    Console.WriteLine("   Установите MUSIC_DIR в .env файле");
+    Console.WriteLine("   Пример: MUSIC_DIR=C:/Users/YourName/Music");
+    musicDirEnv = "./music"; // Fallback
+}
 
 Console.WriteLine($"📝 MUSIC_DIR environment variable: {musicDirEnv}");
 
@@ -147,10 +155,12 @@ List<dynamic> ScanMusicLibrary()
     if (!Directory.Exists(musicPath))
     {
         Console.WriteLine($"⚠️  Music directory not found: {musicPath}");
+        Console.WriteLine($"   Please set MUSIC_DIR in .env file");
+        Console.WriteLine($"   Example: MUSIC_DIR=C:/Users/YourName/Music");
         return tracks;
     }
     
-    // ✨ КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: SearchOption.AllDirectories для поиска во всех подпапках
+    // ✨ Сканирование всех подпапок: SearchOption.AllDirectories
     var flacFiles = Directory.GetFiles(musicPath, "*.flac", SearchOption.AllDirectories);
     var id = 1;
     
@@ -172,6 +182,7 @@ List<dynamic> ScanMusicLibrary()
         var title = parts[1];
         
         Console.WriteLine($"   ✓ {id}. {artist} - {title}");
+        Console.WriteLine($"      📂 {relativePath}");
         
         tracks.Add(new
         {
@@ -199,19 +210,19 @@ List<dynamic> ScanMusicLibrary()
 app.MapGet("/", () => Results.Ok(new
 {
     message = "K-POP FLAC Music Server (ASP.NET Core)",
-    version = "2.4.0",
+    version = "2.5.0",
     status = "online",
-    features = new[] { "Auto-scan music directory", "Subdirectory support", "No rename required", "Subdirectory streaming", "Custom music path" },
+    features = new[] { "Auto-scan music directory", "Subdirectory support", "No rename required", "Custom music path from .env" },
     endpoints = new
     {
         musicList = "/api/music",
-        stream = "/api/stream/{filename}",
-        streamSubdir = "/api/stream/{**filepath}",
+        stream = "/api/stream/{**filepath}",
         trackInfo = "/api/track/{id}",
         search = "/api/search?q={query}",
         artists = "/api/artists",
         formats = "/api/formats",
-        rescan = "/api/rescan"
+        rescan = "/api/rescan",
+        stats = "/api/stats"
     },
     musicDirectory = musicPath,
     serverTime = DateTime.UtcNow
@@ -270,10 +281,10 @@ app.MapGet("/api/stream/{**filepath}", async (string filepath, HttpContext conte
             return Results.Json(new
             {
                 error = "Файл не найден",
-                message = $"Файл {filenameToSearch} не найден в папке музыки (включая подпапки)",
+                message = $"Файл {filenameToSearch} не найден в музыкальной папке (включая подпапки)",
                 searchedPath = filepath,
                 musicDirectory = musicPath,
-                hint = $"Добавьте FLAC файлы в папку {musicPath} или её подпапки"
+                hint = $"Проверьте что MUSIC_DIR установлен правильно в .env файле"
             }, statusCode: 404);
         }
         
@@ -489,8 +500,8 @@ app.MapGet("/api/health", () => Results.Ok(new
 {
     status = "healthy",
     uptime = DateTime.UtcNow,
-    version = "2.4.0",
-    features = new[] { "auto-scan", "subdirectories", "no-rename", "subdirectory-streaming", "custom-music-path" },
+    version = "2.5.0",
+    features = new[] { "auto-scan", "subdirectories", "no-rename", "env-music-dir" },
     musicDirectory = musicPath,
     musicDirectoryExists = Directory.Exists(musicPath)
 }));
@@ -503,7 +514,7 @@ var initialTracks = ScanMusicLibrary();
 
 Console.WriteLine("╔════════════════════════════════════════════════════╗");
 Console.WriteLine("║     🎵 K-POP FLAC Music Server (ASP.NET Core)     ║");
-Console.WriteLine("║    AUTO-SCAN MODE + CUSTOM MUSIC PATH              ║");
+Console.WriteLine("║    AUTO-SCAN + CUSTOM MUSIC PATH FROM .ENV        ║");
 Console.WriteLine("╚════════════════════════════════════════════════════╝");
 Console.WriteLine();
 Console.WriteLine($"🌐 Server:          http://localhost:5000");
@@ -523,11 +534,6 @@ Console.WriteLine("   GET  /api/stats              - Статистика биб
 Console.WriteLine("   GET  /api/download/{**path}  - Скачать трек");
 Console.WriteLine("   GET  /api/health             - Health check");
 Console.WriteLine();
-Console.WriteLine($"✨ Добавьте .flac файлы в: {musicPath}");
-Console.WriteLine("   Формат: 'Artist - Title.flac' или любое имя");
-Console.WriteLine("   Поддержка вложенных папок: Artist/Album/Song.flac");
-Console.WriteLine("🚀 Сервер запущен и готов к работе!");
-Console.WriteLine();
 
 if (initialTracks.Count > 0)
 {
@@ -546,7 +552,10 @@ if (initialTracks.Count > 0)
 else
 {
     Console.WriteLine("⚠️  Музыкальные файлы не найдены!");
-    Console.WriteLine($"   Добавьте .flac файлы в: {musicPath}");
+    Console.WriteLine($"   Установите MUSIC_DIR в .env файле");
+    Console.WriteLine($"   Пример для Windows: MUSIC_DIR=C:/Users/YourName/Music");
+    Console.WriteLine($"   Пример для Linux:   MUSIC_DIR=/home/username/Music");
+    Console.WriteLine($"   Текущий путь: {musicPath}");
     Console.WriteLine();
 }
 

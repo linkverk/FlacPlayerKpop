@@ -4,11 +4,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { filepath: string[] } }
 ) {
-  // Собираем полный путь из всех сегментов
+  // Собираем полный путь из всех сегментов (поддержка подпапок)
   const filepath = params.filepath.join('/');
   const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
   
-  console.log('Stream request:', {
+  console.log('🎵 Stream request:', {
     filepath: filepath,
     segments: params.filepath,
     backendUrl: backendUrl
@@ -22,27 +22,21 @@ export async function GET(
       headers['Range'] = range;
     }
     
-    // ВАЖНО: Кодируем каждую часть пути отдельно для backend
-    const encodedPath = filepath
-      .split('/')
-      .map(segment => encodeURIComponent(segment))
-      .join('/');
+    // ИСПРАВЛЕНИЕ: НЕ кодируем путь вручную!
+    // fetch() автоматически закодирует URL правильно
+    const backendApiUrl = `${backendUrl}/api/stream/${filepath}`;
     
-    const backendApiUrl = `${backendUrl}/api/stream/${encodedPath}`;
-    
-    console.log('Fetching from backend:', {
+    console.log('📡 Fetching from backend:', {
       originalPath: filepath,
-      encodedPath: encodedPath,
       fullUrl: backendApiUrl
     });
     
     const response = await fetch(backendApiUrl, { headers });
     
     if (!response.ok) {
-      console.error('Backend returned error:', {
+      console.error('❌ Backend returned error:', {
         status: response.status,
         filepath: filepath,
-        encodedPath: encodedPath,
         url: backendApiUrl
       });
       
@@ -52,7 +46,6 @@ export async function GET(
           message: `Не удалось получить файл ${filepath} с backend`,
           status: response.status,
           originalPath: filepath,
-          encodedPath: encodedPath,
           backendUrl: backendApiUrl
         },
         { status: response.status }
@@ -65,9 +58,8 @@ export async function GET(
       responseHeaders.set(key, value);
     });
     
-    console.log('Stream success:', {
+    console.log('✅ Stream success:', {
       filepath: filepath,
-      encodedPath: encodedPath,
       contentType: response.headers.get('content-type'),
       contentLength: response.headers.get('content-length'),
       status: response.status
@@ -78,7 +70,7 @@ export async function GET(
       headers: responseHeaders,
     });
   } catch (error) {
-    console.error('Stream proxy error:', error);
+    console.error('❌ Stream proxy error:', error);
     return NextResponse.json(
       { 
         error: 'Backend недоступен',

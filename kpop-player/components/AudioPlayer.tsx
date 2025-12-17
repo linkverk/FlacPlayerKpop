@@ -37,19 +37,22 @@ export default function AudioPlayer({
       setPlayerState(prev => ({ ...prev, currentTrack: track, currentTrackIndex }));
       
       if (audioRef.current) {
-        // Используем relativePath если доступен, иначе filename
+        // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Используем relativePath если доступен (для подпапок), иначе filename
         const streamPath = track.relativePath || track.filename;
-        // ИСПРАВЛЕНО: Кодируем весь путь для корректной работы с подпапками и спецсимволами
-        const encodedPath = streamPath.split('/').map(encodeURIComponent).join('/');
-        audioRef.current.src = `/api/stream/${encodedPath}`;
+        
+        // НЕ кодируем здесь - fetch() сделает это автоматически
+        const streamUrl = `/api/stream/${streamPath}`;
+        
+        audioRef.current.src = streamUrl;
         audioRef.current.load();
         
-        console.log('Loading track:', {
+        console.log('🎵 Loading track:', {
           title: track.title,
           artist: track.artist,
-          path: streamPath,
-          encodedPath: encodedPath,
-          fullUrl: `/api/stream/${encodedPath}`
+          filename: track.filename,
+          relativePath: track.relativePath,
+          streamPath: streamPath,
+          fullUrl: streamUrl
         });
       }
     }
@@ -76,7 +79,7 @@ export default function AudioPlayer({
       }
       setPlayerState(prev => ({ ...prev, isPlaying: !prev.isPlaying }));
     } catch (error) {
-      console.error('Playback error:', error);
+      console.error('❌ Playback error:', error);
       alert('Ошибка воспроизведения. Проверьте консоль для деталей.');
     }
   };
@@ -134,7 +137,7 @@ export default function AudioPlayer({
   };
   
   const handleError = (e: React.SyntheticEvent<HTMLAudioElement, Event>) => {
-    console.error('Audio error:', e);
+    console.error('❌ Audio error:', e);
     const audio = e.currentTarget;
     console.error('Audio error details:', {
       error: audio.error,
@@ -302,9 +305,9 @@ export default function AudioPlayer({
         onPlay={() => setPlayerState(prev => ({ ...prev, isPlaying: true }))}
         onPause={() => setPlayerState(prev => ({ ...prev, isPlaying: false }))}
         onError={handleError}
-        onLoadStart={() => console.log('Loading audio...')}
-        onLoadedData={() => console.log('Audio loaded successfully')}
-        onCanPlay={() => console.log('Audio can play')}
+        onLoadStart={() => console.log('⏳ Loading audio...')}
+        onLoadedData={() => console.log('✅ Audio loaded successfully')}
+        onCanPlay={() => console.log('▶️ Audio can play')}
       />
     </motion.div>
   );
